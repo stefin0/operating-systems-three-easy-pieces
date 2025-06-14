@@ -1,4 +1,4 @@
-#include <assert.h>
+#include "common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,6 +11,7 @@ int main(int argc, char *argv[]) {
   *p = 0;
 
   while (1) {
+    Spin(1);
     *p = *p + 1;
     printf("(%d) p: %d\n", getpid(), *p);
   }
