@@ -12,25 +12,23 @@ same time?
 #include <sys/wait.h>
 #include <unistd.h>
 
-int main(void)
-{
-    int fd = open("./question02.output", O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU);
+int main(void) {
+  // open file with the open() system call
+  int fd = open("./q02.output", O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU);
 
-    int rc = fork();
+  // call fork() to create a new process
+  int rc = fork();
 
-    if (rc < 0) {
-        // Fork failed
-        fprintf(stderr, "fork failed\n");
-        exit(1);
-    } else if (rc == 0) {
-        // Child
-        printf("Child: fd=%d\n", fd);
-        write(fd, "Child writing\n", strlen("Child writing\n"));
-    } else {
-        // Parent
-        printf("Parent: fd=%d\n", fd);
-        write(fd, "Parent writing\n", strlen("Parent writing\n"));
-    }
+  if (rc < 0) { // Fork failed
+    fprintf(stderr, "fork failed\n");
+    exit(1);
+  } else if (rc == 0) { // Child
+    printf("Child: fd=%d\n", fd);
+    write(fd, "Child writing\n", strlen("Child writing\n"));
+  } else { // Parent
+    printf("Parent: fd=%d\n", fd);
+    write(fd, "Parent writing\n", strlen("Parent writing\n"));
+  }
 
-    return 0;
+  return 0;
 }
