@@ -25,69 +25,80 @@
 #define _GNU_SOURCE
 #include <err.h>
 #include <sched.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
+#define ITERATIONS 100000
+#define CONTEXT_SWITCHES_PER_ITERATION 2
+
+long long elapsed_nanoseconds(struct timespec start, struct timespec end) {
+  return (end.tv_sec - start.tv_sec) * 1000000000LL +
+         (end.tv_nsec - start.tv_nsec);
+}
+
 int main(void) {
+  struct timespec startTime, endTime;
   cpu_set_t set;
+  CPU_ZERO(&set);
+  CPU_SET(0, &set);
   int pipedes1[2], pipedes2[2];
 
-  // Create 2 pipes
-  if (pipe(pipedes1) == -1)
+  if (pipe(pipedes1) == -1) // Create first pipe
     err(EXIT_FAILURE, "pipedes1");
-  if (pipe(pipedes2) == -1)
+  if (pipe(pipedes2) == -1) // Create second pipe
     err(EXIT_FAILURE, "pipedes2");
 
-  CPU_ZERO(&set);
+  if (sched_setaffinity(getpid(), sizeof(set), &set) == -1)
+    err(EXIT_FAILURE, "sched_setaffinity");
 
-  // Create 2 processes
-  switch (fork()) {
+  switch (fork()) { // Create 2 processes
   case -1:
     err(EXIT_FAILURE, "fork");
 
   case 0:
-    CPU_SET(0, &set);
-
-    if (sched_setaffinity(getpid(), sizeof(set), &set) == -1)
-      err(EXIT_FAILURE, "sched_setaffinity");
-
-    // Close reading end of first pipe and writing end of second pipe
-    if (close(pipedes1[0]) == -1)
+    if (close(pipedes1[0]) == -1) // Close read end of first pipe
       err(EXIT_FAILURE, "close");
-    if (close(pipedes2[1]) == -1)
+    if (close(pipedes2[1]) == -1) // Close write end of second pipe
       err(EXIT_FAILURE, "close");
 
-    // Write to first pipe
-    char msg = 'c';
-    if (write(pipedes1[1], &msg, 1) == -1)
-      err(EXIT_FAILURE, "write");
-
-    // Read from second pipe
+    char msg1 = 'c';
     char buf1;
-    if (read(pipedes2[0], &buf1, 1) == -1)
-      err(EXIT_FAILURE, "read");
+
+    for (int i = 0; i < ITERATIONS; i++) {
+      write(pipedes1[1], &msg1, 1); // Write to first pipe
+      read(pipedes2[0], &buf1, 1);  // Read from second pipe
+    }
 
     exit(EXIT_SUCCESS);
 
   default:
-    CPU_SET(0, &set);
-
-    if (sched_setaffinity(getpid(), sizeof(set), &set) == -1)
-      err(EXIT_FAILURE, "sched_setaffinity");
-
-    // Close writing end of first pipe and reading end of second pipe
-    if (close(pipedes1[1]) == -1)
+    if (close(pipedes1[1]) == -1) // Close write end of first pipe
       err(EXIT_FAILURE, "close");
-    if (close(pipedes2[0]) == -1)
+    if (close(pipedes2[0]) == -1) // Close read end of second pipe
       err(EXIT_FAILURE, "close");
 
-    // Read from first pipe
+    char msg2 = 'c';
     char buf2;
-    if (read(pipedes1[0], &buf2, 1) == -1)
-      err(EXIT_FAILURE, "read");
 
-    // Write to second pipe
+    printf("Starting timer...\n");
+    clock_gettime(CLOCK_MONOTONIC, &startTime);
+    for (int i = 0; i < ITERATIONS; i++) {
+      read(pipedes1[0], &buf2, 1);  // Read from first pipe
+      write(pipedes2[1], &msg2, 1); // Write to second pipe
+    }
+    clock_gettime(CLOCK_MONOTONIC, &endTime);
+
+    // Calculate and print results
+    long long total_elapsed_ns = elapsed_nanoseconds(startTime, endTime);
+    long long average_ns =
+        total_elapsed_ns / (ITERATIONS * CONTEXT_SWITCHES_PER_ITERATION);
+
+    printf("Performed %d iterations.\n", ITERATIONS);
+    printf("Total time: %lld ns\n", total_elapsed_ns);
+    printf("Average cost of context-switch: %lld ns\n", average_ns);
 
     wait(NULL);
     exit(EXIT_SUCCESS);
